@@ -1,4 +1,4 @@
-name: Deploy ETL to AWS
+name: Pipeline
 
 on:
     push:
@@ -9,8 +9,9 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: etl-processor
-  CDK_VERSION: 2.88.0
+  ECS_CLUSTER: etl-cluster
+  ECS_SERVICE: etl-service
+  CDK_VERSION: 2.130.0
 
 jobs:
   deploy:
@@ -34,26 +35,25 @@ jobs:
         role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
         aws-region: ${{ env.AWS_REGION }}
 
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v1
-
-    - name: Build and push Docker image
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ github.sha }}
-      run: |
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         npm install -g aws-cdk@${{ env.CDK_VERSION }}
 
-    - name: Deploy with CDK
+    - name: Build and Test
+      run: |
+        python -m pytest infra/tests/
+
+    - name: Deploy Infrastructure
       env:
-        IMAGE_TAG: ${{ github.sha }}
+        TASK_DEFINITION: ${{ github.sha }}
       run: |
         cdk deploy --require-approval never
+
+    - name: Verify Deployment
+      run: |
+        aws ecs describe-services \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --services ${{ env.ECS_SERVICE }} \
+          --region ${{ env.AWS_REGION }}
