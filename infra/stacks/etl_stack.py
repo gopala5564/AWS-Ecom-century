@@ -13,8 +13,7 @@ from aws_cdk import (
     aws_ec2 as ec2,
     aws_ecs as ecs,
     aws_ecs_patterns as ecs_patterns,
-    aws_ecr_assets as ecr_assets,
-    DockerImageAsset
+    aws_ecr_assets,
 )
 
 class EtlStack(Stack):
@@ -58,14 +57,6 @@ class EtlStack(Stack):
             topic_name="etl-notifications"
         )
 
-        # Create ECR repository
-        repository = ecr.Repository(
-            self, "EtlRepository",
-            repository_name="etl-processor-repo",
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_images=True
-        )
-
         # Create VPC for ECS
         vpc = ec2.Vpc(
             self, "EtlVpc",
@@ -104,12 +95,9 @@ class EtlStack(Stack):
         # Add container to task definition
         task_definition.add_container(
             "EtlContainer",
-            image=ecs.ContainerImage.from_docker_image_asset(
-                DockerImageAsset(
-                    self, "EtlDockerImage",
-                    directory=".",
-                    file="Dockerfile"
-                )
+            image=ecs.ContainerImage.from_asset(
+                directory=".",
+                file="Dockerfile"
             ),
             environment={
                 "RAW_BUCKET": raw_bucket.bucket_name,

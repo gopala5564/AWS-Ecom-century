@@ -29,8 +29,8 @@ def test_etl_stack_creates_resources():
     # Test ECS Task Definition
     template.has_resource_properties("AWS::ECS::TaskDefinition", {
         "RequiresCompatibilities": ["FARGATE"],
-        "Memory": "2048",
-        "Cpu": "1024"
+        "Memory": "4096",
+        "Cpu": "2048"
     })
     
     # Test EventBridge Rule
