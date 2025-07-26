@@ -23,18 +23,44 @@ def test_etl_stack_creates_resources():
         ]
     })
     
-    # Test VPC
+    # Test ECS Infrastructure
     template.resource_count_is("AWS::EC2::VPC", 1)
+    template.resource_count_is("AWS::ECS::Cluster", 1)
+    template.resource_count_is("AWS::ECS::TaskDefinition", 1)
     
-    # Test ECS Task Definition
+    # Test ECS Task Definition Properties
     template.has_resource_properties("AWS::ECS::TaskDefinition", {
         "RequiresCompatibilities": ["FARGATE"],
         "Memory": "4096",
-        "Cpu": "2048"
+        "Cpu": "2048",
+        "ContainerDefinitions": assertions.Match.array_with([
+            assertions.Match.object_like({
+                "Environment": assertions.Match.array_with([
+                    {"Name": "RAW_BUCKET"},
+                    {"Name": "PROCESSED_BUCKET"},
+                    {"Name": "METADATA_TABLE"},
+                    {"Name": "NOTIFICATION_TOPIC"}
+                ]),
+                "LogConfiguration": assertions.Match.object_like({
+                    "LogDriver": "awslogs"
+                })
+            })
+        ])
     })
     
-    # Test EventBridge Rule
+    # Test EventBridge Rule and Target
     template.resource_count_is("AWS::Events::Rule", 1)
+    template.has_resource_properties("AWS::Events::Rule", {
+        "ScheduleExpression": "rate(1 hour)",
+        "Targets": assertions.Match.array_with([
+            assertions.Match.object_like({
+                "Arn": assertions.Match.any_value(),
+                "EcsParameters": assertions.Match.object_like({
+                    "TaskDefinitionArn": assertions.Match.any_value()
+                })
+            })
+        ])
+    })
 
 def test_etl_stack_security_configuration():
     # GIVEN
@@ -50,15 +76,16 @@ def test_etl_stack_security_configuration():
         "VersioningConfiguration": {"Status": "Enabled"}
     })
     
-    # Test Task Definition Role
+    # Test Task Definition Roles
     template.has_resource_properties("AWS::IAM::Role", {
         "AssumeRolePolicyDocument": {
             "Statement": [{
                 "Action": "sts:AssumeRole",
                 "Effect": "Allow",
                 "Principal": {
-                    "Service": ["ecs-tasks.amazonaws.com"]
+                    "Service": "ecs-tasks.amazonaws.com"
                 }
             }]
-        }
+        },
+        "Description": "Role for ETL ECS Task"
     })
