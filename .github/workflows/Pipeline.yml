@@ -37,7 +37,7 @@ env:
   AWS_REGION: us-east-1
   CDK_VERSION: 2.130.0
   PYTHON_VERSION: '3.9'
-  NODE_VERSION: '18'
+  NODE_VERSION: '20'
 
 permissions:
   id-token: write
