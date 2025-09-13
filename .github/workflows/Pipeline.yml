@@ -160,7 +160,7 @@ jobs:
           aws ecs describe-clusters --clusters etl-cluster
 
       - name: Upload CDK Outputs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: cdk-outputs
           path: cdk-outputs.json
