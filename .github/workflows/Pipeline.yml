@@ -2,6 +2,16 @@ name: ETL Pipeline
 
 on:
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
   push:
     branches: [ main, develop, 'feature/*', 'bugfix/*', 'hotfix/*' ]
     paths:
@@ -16,17 +26,7 @@ on:
   pull_request:
     branches: [ main, develop ]
     types: [opened, synchronize, reopened]
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy to'
-        required: true
-        default: 'dev'
-        type: choice
-        options:
-          - dev
-          - staging
-          - prod
+
 
 env:
   AWS_REGION: us-east-1
