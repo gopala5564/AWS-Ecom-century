@@ -2,7 +2,9 @@ name: ETL Pipeline
 
 on:
   push:
-    branches: [ main, develop, 'feature/*', 'bugfix/*', 'hotfix/*' ]
+    branches: 
+      '*'
+      '!main'
     paths:
       - 'src/**'
       - 'infra/**'
