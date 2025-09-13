@@ -2,51 +2,163 @@ name: ETL Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
 
 env:
   AWS_REGION: us-east-1
   CDK_VERSION: 2.130.0
+  PYTHON_VERSION: '3.9'
+  NODE_VERSION: '18'
 
 permissions:
   id-token: write
   contents: read
   packages: write
+  pull-requests: write
 
 jobs:
-  deploy:
+  validate:
+    name: Validate and Test
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run linting
+        run: |
+          pylint src/ infra/
+          black --check .
+          isort --check-only .
+
+      - name: Run tests with coverage
+        run: |
+          pytest infra/tests/ --cov=infra --cov=src --cov-report=xml
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: true
+
+  build:
+    name: Build and Package
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and cache Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: false
+          load: true
+          tags: etl-processor:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy Infrastructure
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
     
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-        cache: 'pip'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v2
-      with:
-        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-        aws-region: ${{ env.AWS_REGION }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        npm install -g aws-cdk@${{ env.CDK_VERSION }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
-    - name: Run tests
-      run: |
-        python -m pytest infra/tests/
+      - name: Install CDK dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          npm install -g aws-cdk@${{ env.CDK_VERSION }}
 
-    - name: Deploy infrastructure
-      if: github.ref == 'refs/heads/main'
-      run: |
-        cdk deploy --require-approval never
+      - name: CDK Synth
+        run: cdk synth
+
+      - name: CDK Deploy
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          cdk deploy --require-approval never \
+            --context environment=${{ github.event.inputs.environment || 'dev' }} \
+            --outputs-file cdk-outputs.json
+
+      - name: Verify Deployment
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          # Check S3 buckets
+          aws s3 ls s3://raw-data-bucket-ecom-century
+          aws s3 ls s3://processed-data-bucket-ecom-century
+          
+          # Check DynamoDB table
+          aws dynamodb describe-table --table-name etl-metadata
+          
+          # Check ECS cluster
+          aws ecs describe-clusters --clusters etl-cluster
+
+      - name: Upload CDK Outputs
+        uses: actions/upload-artifact@v3
+        with:
+          name: cdk-outputs
+          path: cdk-outputs.json
+          retention-days: 5
+
+  cleanup:
+    name: Cleanup
+    if: always()
+    needs: [validate, build, deploy]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cleanup Docker cache
+        run: docker system prune -af
