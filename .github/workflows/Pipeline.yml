@@ -4,11 +4,7 @@ on:
   push:
     branches:
       - main
-      - develop
-      - 'feature/**'
-      - 'bugfix/**'
-      - 'hotfix/**'
-      - 'release/**'
+      - '*'
     paths:
       - '**'
       - '!**.md'
