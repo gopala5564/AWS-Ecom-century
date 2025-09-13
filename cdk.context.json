@@ -1,5 +1,12 @@
 {
-  "acknowledged-issue-numbers": [
-    34892
-  ]
+  "availability-zones:account=123456789012:region=us-east-1": [
+    "us-east-1a",
+    "us-east-1b",
+    "us-east-1c"
+  ],
+  "vpc-provider:account=123456789012:region=us-east-1:filter.vpc-id=vpc-123456": {
+    "vpcId": "vpc-123456",
+    "availabilityZones": ["us-east-1a", "us-east-1b"],
+    "privateSubnetIds": ["subnet-123", "subnet-456"]
+  }
 }

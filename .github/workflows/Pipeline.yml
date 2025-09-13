@@ -1,27 +1,25 @@
-name: Pipeline
+name: ETL Pipeline
 
 on:
   push:
-    branches: '*'
+    branches: [ main ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
-  ECS_CLUSTER: etl-cluster
-  ECS_SERVICE: etl-service
   CDK_VERSION: 2.130.0
-  DOCKER_BUILDKIT: 1  # Enable BuildKit for better Docker builds
+
+permissions:
+  id-token: write
+  contents: read
+  packages: write
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-      packages: write  # Added for Docker operations
-
+    
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
@@ -30,9 +28,7 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: '3.9'
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+        cache: 'pip'
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v2
@@ -46,38 +42,11 @@ jobs:
         pip install -r requirements.txt
         npm install -g aws-cdk@${{ env.CDK_VERSION }}
 
-    - name: Build and Test
+    - name: Run tests
       run: |
         python -m pytest infra/tests/
 
-    - name: Build Docker Image
-      run: |
-        docker build -t etl-processor .
-        docker tag etl-processor:latest ${{ env.ECS_CLUSTER }}/etl-processor:${{ github.sha }}
-
-    - name: Deploy Infrastructure
-      env:
-        TASK_DEFINITION: ${{ github.sha }}
+    - name: Deploy infrastructure
+      if: github.ref == 'refs/heads/main'
       run: |
         cdk deploy --require-approval never
-
-    - name: Verify Deployment
-      run: |
-        aws ecs wait services-stable \
-          --cluster ${{ env.ECS_CLUSTER }} \
-          --services ${{ env.ECS_SERVICE }}
-        
-        aws ecs describe-services \
-          --cluster ${{ env.ECS_CLUSTER }} \
-          --services ${{ env.ECS_SERVICE }} \
-          --region ${{ env.AWS_REGION }}
-
-    - name: Deployment Status
-      if: always()
-      run: |
-        if [ $? -eq 0 ]; then
-          echo "Deployment successful!"
-        else
-          echo "Deployment failed!"
-          exit 1
-        fi
