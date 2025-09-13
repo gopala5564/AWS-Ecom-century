@@ -1,6 +1,24 @@
 name: ETL Pipeline
 
 on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'bugfix/**'
+      - 'hotfix/**'
+      - 'release/**'
+    paths:
+      - '**'
+      - '!**.md'
+      - '!docs/**'
+      - '!**/*.test.py'
+  pull_request:
+    branches: 
+      - main
+      - develop
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:
       environment:
@@ -8,24 +26,10 @@ on:
         required: true
         default: 'dev'
         type: choice
-        options:
+        options: 
           - dev
           - staging
           - prod
-  push:
-    branches: [ main, develop, 'feature/*', 'bugfix/*', 'hotfix/*' ]
-    paths:
-      - 'src/**'
-      - 'infra/**'
-      - 'Dockerfile'
-      - 'requirements.txt'
-      - '.github/workflows/**'
-      - '!**.md'
-      - '!docs/**'
-      - '!**/*.test.py'
-  pull_request:
-    branches: [ main, develop ]
-    types: [opened, synchronize, reopened]
 
 
 env:
