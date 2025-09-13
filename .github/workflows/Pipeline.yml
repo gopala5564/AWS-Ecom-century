@@ -2,12 +2,20 @@ name: ETL Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, 'feature/*', 'bugfix/*', 'hotfix/*' ]
+    paths:
+      - 'src/**'
+      - 'infra/**'
+      - 'Dockerfile'
+      - 'requirements.txt'
+      - '.github/workflows/**'
     paths-ignore:
       - '**.md'
       - 'docs/**'
+      - '**/*.test.py'
   pull_request:
     branches: [ main, develop ]
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:
       environment:
