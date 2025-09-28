@@ -124,5 +124,3 @@ class SpotifyEtlStack(Stack):
         self.curated_bucket = curated_bucket
         self.metadata_table = metadata_table
         self.notification_topic = notification_topic
-
-*** End Patch
